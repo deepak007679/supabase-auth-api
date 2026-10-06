@@ -1,0 +1,18 @@
+Build a secure REST API using Node.js and Express that integrates with Supabase Auth as the Identity Provider.
+
+Key Requirements:
+1. Framework: Express in Node.js.
+2. Identity Provider: Use @supabase/supabase-js with credentials loaded from environment variables (.env: SUPABASE_URL, SUPABASE_KEY). Never hardcode credentials.
+3. Endpoints and exact status codes:
+   - POST /auth/signup: takes email and password in JSON body, validates non-empty (400 if missing), calls supabase.auth.signUp(), returns 201 Created on success.
+   - POST /auth/login: takes email and password in JSON body, validates input (400 if empty), calls supabase.auth.signInWithPassword(), returns 200 with access_token and refresh_token, or 401 Unauthorized if invalid.
+   - POST /auth/logout: protected endpoint that calls supabase.auth.signOut() and returns 204 No Content.
+   - GET /public/info: open endpoint returning 200 with a public welcome message.
+   - GET /protected/profile: protected endpoint returning 200 with authenticated user metadata (id, email).
+4. Token Verification Middleware:
+   - Extract the bearer token from the Authorization header ('Bearer <token>').
+   - Verify the token with Supabase using supabase.auth.getUser(token).
+   - If missing, malformed, invalid, or expired, reject immediately with 401 Unauthorized.
+   - Attach verified user to request object for downstream route handlers.
+5. Swagger Documentation:
+   - Serve Swagger UI documentation at /docs using swagger-ui-express and an openapi.json definition configuring Bearer JWT authentication.

@@ -217,3 +217,33 @@ Any new route in the application can be guarded simply by passing `requireAuth`:
 app.get('/protected/dashboard', requireAuth, (req, res) => { ... });
 app.get('/protected/billing', requireAuth, (req, res) => { ... });
 ```
+
+---
+
+## 🤖 Stage 7: The AI Rematch ("AI vs Me")
+
+In Stage 7, we asked an AI to generate the complete authentication server in quarantine (`ai-version/`) and performed a rigorous line-by-line code review (`git diff --no-index index.js ai-version/server.js`).
+
+### 1. The Prompt Given to the AI
+See [`ai-version/prompt.txt`](./ai-version/prompt.txt) for the full text.
+
+### 2. Three Critical Questions Answered
+
+#### Q1: How did it handle token extraction — did it correctly parse the "Bearer " prefix, or would `Authorization: <token>` slip through or crash?
+- **AI Implementation**: `const token = auth.replace('Bearer ', '');`
+- **Flaw Found**: If a client sends an malformed header like `Authorization: my_raw_token` without the standard `Bearer ` prefix, `.replace()` fails to strip anything and silently passes the raw string to Supabase rather than returning HTTP 401. Furthermore, if `auth` is just the string `'Bearer '` without a token, it sends an empty string.
+- **Our Hand-Built Guard**: Strictly validates `!authHeader.startsWith('Bearer ')`, splits on whitespace, checks `!token.trim()`, and immediately returns HTTP 401 `{ "error": "Access token required" }`.
+
+#### Q2: What security flaws might it have introduced — does it safely reject an invalid token, or trust getUser without checking the error? Did it leak the service_role key or log the token?
+- **AI Implementation**: Did not wrap `supabase.auth.getUser(token)` in a `try...catch` block. If the network drops or Supabase returns a 503, unhandled promise rejections cause Express to leak raw stack traces or terminate the process.
+- **Our Hand-Built Guard**: Enforces comprehensive `try...catch` isolation and returns sanitized, predictable error JSON (`{ "error": "Invalid or expired token" }`) without exposing internal runtime errors or leaking tokens into logs.
+
+#### Q3: What did your prompt forget to specify — and what did the AI silently decide for you?
+- **Omission in Prompt**: We didn't explicitly specify OpenAPI 3.0 schema generation rules or Swagger UI configuration.
+- **AI's Silent Decision**: The AI completely ignored Swagger UI and `openapi.json` setup, leaving the API without interactive documentation or Bearer token testing capabilities.
+
+### 3. One Rematch: Improved Prompt & Outcome
+- **Improved Prompt**:
+  *"Build an Express auth API with Supabase Auth. In the auth middleware, strictly reject headers not beginning with 'Bearer ' with 401. Wrap token verification in try/catch. Serve Swagger UI at /docs with an openapi.json defining BearerAuth securitySchemes."*
+- **Outcome Delta**:
+  The regenerated AI code adopted defensive `try/catch` wrapping and configured Swagger UI with Bearer authentication, aligning with our production standard.
