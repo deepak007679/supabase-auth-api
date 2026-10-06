@@ -37,6 +37,16 @@
           }
         }
       },
+      "RefreshRequest": {
+        "type": "object",
+        "required": ["refresh_token"],
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "example": "d290f1ee6c1746c6..."
+          }
+        }
+      },
       "LoginResponse": {
         "type": "object",
         "properties": {
@@ -69,9 +79,7 @@
         "summary": "Public open information",
         "description": "Accessible by anyone without authentication",
         "responses": {
-          "200": {
-            "description": "Public greeting message"
-          }
+          "200": { "description": "Public greeting message" }
         }
       }
     },
@@ -89,21 +97,14 @@
         },
         "responses": {
           "201": { "description": "User created successfully" },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
-              }
-            }
-          }
+          "400": { "description": "Validation error" }
         }
       }
     },
     "/auth/login": {
       "post": {
-        "summary": "Log in and obtain JWT access token",
-        "description": "Authenticates user credentials against Supabase and returns JWT",
+        "summary": "Log in and obtain JWT access token (Rate limited)",
+        "description": "Authenticates user credentials against Supabase and returns JWT. Protected with 429 brute-force limit.",
         "requestBody": {
           "required": true,
           "content": {
@@ -113,16 +114,29 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Login successful with JWT access token",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/LoginResponse" }
-              }
-            }
-          },
+          "200": { "description": "Login successful with JWT access token" },
           "400": { "description": "Missing credentials" },
-          "401": { "description": "Invalid login credentials" }
+          "401": { "description": "Invalid login credentials" },
+          "429": { "description": "Too many failed attempts (Locked out for 5 minutes)" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh expired access token",
+        "description": "Rotates refresh token and returns fresh access token without re-prompting for credentials",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RefreshRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token rotated successfully" },
+          "400": { "description": "Missing refresh token" },
+          "401": { "description": "Invalid or expired refresh token" }
         }
       }
     },
@@ -162,6 +176,20 @@
         "responses": {
           "200": { "description": "Protected user metrics and dashboard view" },
           "401": { "description": "Missing, malformed, or invalid token" }
+        }
+      }
+    },
+    "/protected/admin": {
+      "get": {
+        "summary": "Admin-only restricted portal (Role-based Authorization)",
+        "description": "Requires both authentication (401) and administrative role authorization (403)",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": { "description": "Admin metrics accessed successfully" },
+          "401": { "description": "Unauthenticated user" },
+          "403": { "description": "Forbidden: User lacks administrative authorization" }
         }
       }
     }

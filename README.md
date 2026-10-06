@@ -74,7 +74,7 @@ Interactive documentation with the OpenAPI 3.0 **Authorize [🔒]** padlock is a
 2. Execute `POST /auth/signup` to register a new user.
 3. Execute `POST /auth/login` and copy the returned `access_token`.
 4. Click the green **Authorize [🔒]** button at the top right, paste your token, and click **Authorize**.
-5. Execute `GET /protected/profile` and `GET /protected/dashboard` — notice they execute seamlessly with your authorized session!
+5. Execute `GET /protected/profile`, `GET /protected/dashboard`, and `GET /protected/admin` — notice they execute seamlessly with your authorized session!
 
 ---
 
@@ -84,10 +84,12 @@ Interactive documentation with the OpenAPI 3.0 **Authorize [🔒]** padlock is a
 |---|---|---|---|---|
 | `GET` | `/public/info` | **None** (Public) | Public welcome endpoint; accessible without tokens | `200` |
 | `POST` | `/auth/signup` | **None** (Open) | Register a new account with email & password | `201`, `400` |
-| `POST` | `/auth/login` | **None** (Open) | Authenticate user; returns JWT `access_token` and `refresh_token` | `200`, `400`, `401` |
+| `POST` | `/auth/login` | **None** (Open) | Authenticate user; returns JWT `access_token` and `refresh_token` (Rate limited) | `200`, `400`, `401`, `429` |
+| `POST` | `/auth/refresh` | **None** (Open) | Exchange refresh token for fresh access token | `200`, `400`, `401` |
 | `POST` | `/auth/logout` | **Bearer JWT** | Invalidate active session and sign out | `204`, `401` |
 | `GET` | `/protected/profile`| **Bearer JWT** | Read authenticated user ID, email, and metadata | `200`, `401` |
 | `GET` | `/protected/dashboard`| **Bearer JWT** | Second protected route proving middleware guard reuse | `200`, `401` |
+| `GET` | `/protected/admin`| **Bearer JWT + Admin Role** | Admin-only restricted endpoint (Role-based Authorization) | `200`, `401`, `403` |
 | `GET` | `/docs` | **None** (Public) | Interactive Swagger UI API documentation | `200` |
 
 ---
@@ -215,7 +217,46 @@ async function requireAuth(req, res, next) {
 Any new route in the application can be guarded simply by passing `requireAuth`:
 ```javascript
 app.get('/protected/dashboard', requireAuth, (req, res) => { ... });
-app.get('/protected/billing', requireAuth, (req, res) => { ... });
+app.get('/protected/admin', requireAuth, (req, res) => { ... });
+```
+
+---
+
+## ★ Extras & Stretch Goals Implemented
+
+### 1. The 401 vs 403 Distinction (`GET /protected/admin`)
+- **401 Unauthorized**: *"I do not know who you are."* (Missing, expired, or malformed authentication credentials).
+- **403 Forbidden**: *"I know who you are, but you are not allowed in."* (Valid authentication, but lacking authorization / administrative privileges).
+
+```bash
+# Calling /protected/admin as regular user returns 403:
+$ curl -i http://localhost:3000/protected/admin \
+  -H "Authorization: Bearer <REGULAR_USER_TOKEN>"
+
+HTTP/1.1 403 Forbidden
+{"error":"Forbidden: Admin access required","detail":"Authenticated user does not possess administrative privileges."}
+```
+
+### 2. Token Refresh Rotation (`POST /auth/refresh`)
+- Access tokens are intentionally short-lived (Supabase default: 1 hour) to limit the blast radius if a bearer token is intercepted in transit.
+- When an access token expires, clients call `POST /auth/refresh` with their `refresh_token` to rotate tokens and obtain a fresh access token without prompting the user for credentials again.
+
+```bash
+$ curl -i -X POST http://localhost:3000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token":"d290f1ee6c1746c6..."}'
+
+HTTP/1.1 200 OK
+{"message":"Token refreshed successfully","access_token":"eyJhbGciOiJIUzI1Ni...","token_type":"bearer","expires_in":3600}
+```
+
+### 3. Brute-Force Rate Limiting (`POST /auth/login` -> 429)
+- Credential stuffing and automated password guessing target login endpoints.
+- Our API enforces an IP/client-based sliding lockout: after 5 consecutive failed login attempts, the route locks out the requester for 5 minutes with **HTTP 429 Too Many Requests**:
+
+```bash
+HTTP/1.1 429 Too Many Requests
+{"error":"Too many failed login attempts. Account temporarily locked for 5 minutes."}
 ```
 
 ---
