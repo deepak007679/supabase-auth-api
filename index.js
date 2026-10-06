@@ -85,8 +85,8 @@ app.get('/public/info', (req, res) => {
   res.status(200).json({ message: 'Welcome stranger! This info is public.' });
 });
 
-// Stage 2: Unverified protected gate (header check only)
-app.get('/protected/profile', (req, res) => {
+// Stage 3: Protected gate with real Supabase token verification
+app.get('/protected/profile', async (req, res) => {
   const authHeader = req.headers['authorization'];
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Access token required' });
@@ -97,11 +97,23 @@ app.get('/protected/profile', (req, res) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  // Stage 2: Unverified check - acknowledges token is presented
-  return res.status(200).json({
-    message: 'Token received (unverified)',
-    tokenPreview: token.substring(0, 10) + '...'
-  });
+  try {
+    // Stage 3: Verify token with Supabase
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data || !data.user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    // Return safe user metadata
+    return res.status(200).json({
+      id: data.user.id,
+      email: data.user.email,
+      created_at: data.user.created_at
+    });
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
 });
 
 if (require.main === module) {
