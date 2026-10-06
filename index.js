@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const { supabase } = require('./supabaseClient');
+const { requireAuth } = require('./authMiddleware');
 
 const app = express();
 app.use(express.json());
@@ -12,7 +13,15 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Supabase Auth API',
     version: '1.0.0',
-    status: 'connected to Supabase'
+    status: 'connected to Supabase',
+    endpoints: [
+      'POST /auth/signup',
+      'POST /auth/login',
+      'POST /auth/logout',
+      'GET /public/info',
+      'GET /protected/profile',
+      'GET /protected/dashboard'
+    ]
   });
 });
 
@@ -80,40 +89,45 @@ app.post('/auth/login', async (req, res) => {
   }
 });
 
+// Stage 4: Protected Logout endpoint
+app.post('/auth/logout', requireAuth, async (req, res) => {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    // Return 204 No Content on successful logout
+    return res.status(204).send();
+  } catch (err) {
+    return res.status(500).json({ error: 'Internal server error during logout', details: err.message });
+  }
+});
+
 // Stage 2: Public gate
 app.get('/public/info', (req, res) => {
   res.status(200).json({ message: 'Welcome stranger! This info is public.' });
 });
 
-// Stage 3: Protected gate with real Supabase token verification
-app.get('/protected/profile', async (req, res) => {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
+// Stage 4: Protected profile gate using reusable auth middleware
+app.get('/protected/profile', requireAuth, (req, res) => {
+  return res.status(200).json({
+    id: req.user.id,
+    email: req.user.email,
+    created_at: req.user.created_at
+  });
+});
 
-  const token = authHeader.split(' ')[1];
-  if (!token || token.trim() === '') {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  try {
-    // Stage 3: Verify token with Supabase
-    const { data, error } = await supabase.auth.getUser(token);
-
-    if (error || !data || !data.user) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
+// Stage 4 Checkpoint: Second protected route proving middleware reuse
+app.get('/protected/dashboard', requireAuth, (req, res) => {
+  return res.status(200).json({
+    message: `Welcome to your protected dashboard, ${req.user.email}!`,
+    userId: req.user.id,
+    role: req.user.role || 'authenticated',
+    metrics: {
+      activeSessions: 1,
+      lastLogin: new Date().toISOString()
     }
-
-    // Return safe user metadata
-    return res.status(200).json({
-      id: data.user.id,
-      email: data.user.email,
-      created_at: data.user.created_at
-    });
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
-  }
+  });
 });
 
 if (require.main === module) {
