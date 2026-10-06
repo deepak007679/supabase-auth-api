@@ -1,0 +1,169 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Supabase Auth API",
+    "version": "1.0.0",
+    "description": "Secure API with Supabase Auth, JWT verification, and protected routes"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your Supabase JWT access token obtained from /auth/login"
+      }
+    },
+    "schemas": {
+      "AuthRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "developer@flyrank.com"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "example": "SuperSecretPass123!"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "access_token": { "type": "string" },
+          "refresh_token": { "type": "string" },
+          "token_type": { "type": "string", "example": "bearer" },
+          "expires_in": { "type": "integer", "example": 3600 },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "email": { "type": "string" },
+              "created_at": { "type": "string" }
+            }
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/public/info": {
+      "get": {
+        "summary": "Public open information",
+        "description": "Accessible by anyone without authentication",
+        "responses": {
+          "200": {
+            "description": "Public greeting message"
+          }
+        }
+      }
+    },
+    "/auth/signup": {
+      "post": {
+        "summary": "Register a new user account",
+        "description": "Creates an account with Supabase Auth Identity Provider",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AuthRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "User created successfully" },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Log in and obtain JWT access token",
+        "description": "Authenticates user credentials against Supabase and returns JWT",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AuthRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful with JWT access token",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/LoginResponse" }
+              }
+            }
+          },
+          "400": { "description": "Missing credentials" },
+          "401": { "description": "Invalid login credentials" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Log out user and end session",
+        "description": "Protected endpoint that invalidates the user's active session",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "204": { "description": "Logged out successfully (No Content)" },
+          "401": { "description": "Missing, malformed, or invalid token" }
+        }
+      }
+    },
+    "/protected/profile": {
+      "get": {
+        "summary": "Read authenticated user profile",
+        "description": "Guarded by Supabase JWT verification middleware",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": { "description": "Authenticated user profile details" },
+          "401": { "description": "Missing, malformed, or invalid token" }
+        }
+      }
+    },
+    "/protected/dashboard": {
+      "get": {
+        "summary": "Read protected dashboard data",
+        "description": "Demonstrates reuse of the same auth middleware guard across multiple endpoints",
+        "security": [
+          { "BearerAuth": [] }
+        ],
+        "responses": {
+          "200": { "description": "Protected user metrics and dashboard view" },
+          "401": { "description": "Missing, malformed, or invalid token" }
+        }
+      }
+    }
+  }
+}

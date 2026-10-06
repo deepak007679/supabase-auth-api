@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const swaggerUi = require('swagger-ui-express');
+const openapiSpec = require('./openapi.json');
 const { supabase } = require('./supabaseClient');
 const { requireAuth } = require('./authMiddleware');
 
@@ -8,11 +10,20 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
+// Stage 5: Swagger UI with Bearer Authentication at /docs
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(openapiSpec, {
+  swaggerOptions: {
+    persistAuthorization: true
+  },
+  customSiteTitle: 'Supabase Auth API Docs'
+}));
+
 // Root info
 app.get('/', (req, res) => {
   res.json({
     name: 'Supabase Auth API',
     version: '1.0.0',
+    documentation: 'http://localhost:3000/docs',
     status: 'connected to Supabase',
     endpoints: [
       'POST /auth/signup',
@@ -20,7 +31,8 @@ app.get('/', (req, res) => {
       'POST /auth/logout',
       'GET /public/info',
       'GET /protected/profile',
-      'GET /protected/dashboard'
+      'GET /protected/dashboard',
+      'GET /docs'
     ]
   });
 });
@@ -96,7 +108,6 @@ app.post('/auth/logout', requireAuth, async (req, res) => {
     if (error) {
       return res.status(500).json({ error: error.message });
     }
-    // Return 204 No Content on successful logout
     return res.status(204).send();
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error during logout', details: err.message });
@@ -133,6 +144,7 @@ app.get('/protected/dashboard', requireAuth, (req, res) => {
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT} and connected to Supabase`);
+    console.log(`Swagger documentation available at http://localhost:${PORT}/docs`);
   });
 }
 
