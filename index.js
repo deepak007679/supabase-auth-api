@@ -20,7 +20,6 @@ app.get('/', (req, res) => {
 app.post('/auth/signup', async (req, res) => {
   const { email, password } = req.body || {};
 
-  // Validate: if email or password is missing, return 400
   if (!email || typeof email !== 'string' || !email.trim() ||
       !password || typeof password !== 'string' || !password.trim()) {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -49,7 +48,6 @@ app.post('/auth/signup', async (req, res) => {
 app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body || {};
 
-  // Validate empty fields -> 400
   if (!email || typeof email !== 'string' || !email.trim() ||
       !password || typeof password !== 'string' || !password.trim()) {
     return res.status(400).json({ error: 'Email and password are required' });
@@ -61,12 +59,10 @@ app.post('/auth/login', async (req, res) => {
       password
     });
 
-    // If Supabase rejects credentials, return 401
     if (error || !data || !data.session) {
       return res.status(401).json({ error: 'Invalid login credentials' });
     }
 
-    // On success, return 200 with access token and refresh token
     return res.status(200).json({
       message: 'Login successful',
       access_token: data.session.access_token,
@@ -82,6 +78,30 @@ app.post('/auth/login', async (req, res) => {
   } catch (err) {
     return res.status(500).json({ error: 'Internal server error during login', details: err.message });
   }
+});
+
+// Stage 2: Public gate
+app.get('/public/info', (req, res) => {
+  res.status(200).json({ message: 'Welcome stranger! This info is public.' });
+});
+
+// Stage 2: Unverified protected gate (header check only)
+app.get('/protected/profile', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token || token.trim() === '') {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  // Stage 2: Unverified check - acknowledges token is presented
+  return res.status(200).json({
+    message: 'Token received (unverified)',
+    tokenPreview: token.substring(0, 10) + '...'
+  });
 });
 
 if (require.main === module) {
